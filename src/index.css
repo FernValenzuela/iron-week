@@ -10,5 +10,19 @@ body,
 
 body {
   margin: 0;
+  background: #070D13;
+  color: #E6EDF3;
 }
 
+input,
+textarea {
+  background: #0B121A !important;
+  border-color: #2C3A4F !important;
+  color: #E6EDF3 !important;
+  color-scheme: dark;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #64748B;
+}
