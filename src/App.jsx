@@ -450,7 +450,8 @@ export default function App(){
   const [toast,setToast]           = useState(null);
   const [benchWeight,setBenchWeight]       = useState(()=>ls.get("benchWeight",155));
   const [nextWorkoutIdx,setNextWorkoutIdx] = useState(()=>ls.get("nextWorkoutIdx",0));
-  const [usePlanA,setUsePlanA]             = useState(()=>ls.get("usePlanA",true));
+  const [planMode,setPlanMode]             = useState(()=>ls.get("planMode","planA"));
+  const [customPlans,setCustomPlans]       = useState(()=>ls.get("iw_custom_plans",[]));
   const [volumeMod,setVolumeMod]           = useState(()=>ls.get("volumeMod","normal"));
   const [workoutVariants,setWorkoutVariants] = useState(()=>ls.get("workoutVariants",{}));
   const [logs,setLogs]                     = useState(()=>ls.get("logs",{}));
@@ -461,7 +462,8 @@ export default function App(){
 
   useEffect(()=>ls.set("benchWeight",benchWeight),[benchWeight]);
   useEffect(()=>ls.set("nextWorkoutIdx",nextWorkoutIdx),[nextWorkoutIdx]);
-  useEffect(()=>ls.set("usePlanA",usePlanA),[usePlanA]);
+  useEffect(()=>ls.set("planMode",planMode),[planMode]);
+  useEffect(()=>ls.set("iw_custom_plans",customPlans),[customPlans]);
   useEffect(()=>ls.set("volumeMod",volumeMod),[volumeMod]);
   useEffect(()=>ls.set("workoutVariants",workoutVariants),[workoutVariants]);
   useEffect(()=>ls.set("logs",logs),[logs]);
@@ -498,11 +500,17 @@ export default function App(){
     showToast("Backup restored","success");
   },[showToast]);
 
-  const basePlan = usePlanA ? PLAN_4 : PLAN_3;
+  const basePlan = planMode==="custom"
+    ? customPlans.map(cp=>({id:cp.id, label:cp.name, tag:cp.tag, exercises:cp.exercises||[]}))
+    : planMode==="planB" ? PLAN_3 : PLAN_4;
   const plan = basePlan.map(w=>selectWorkoutVariant(w, workoutVariants[w.id]));
-  const currentWorkout = plan[nextWorkoutIdx % plan.length];
-  const logKey = workoutLogKey(weekKey,currentWorkout);
+  const currentWorkout = plan.length ? plan[nextWorkoutIdx % plan.length] : null;
+  const logKey = currentWorkout ? workoutLogKey(weekKey,currentWorkout) : "";
   const wlog   = logs[logKey]||{completed:[],skipped:[],sets:{}};
+
+  // Bridge for existing tab props that still take usePlanA; T03/T04 migrate them off.
+  const usePlanA = planMode==="planA";
+  const setUsePlanA = useCallback(v=>setPlanMode(v?"planA":"planB"),[]);
 
   const completeWorkout = () => { setNextWorkoutIdx(i=>i+1); showToast("Workout logged. Rest up!","success"); };
   const undoWorkout     = () => { setNextWorkoutIdx(i=>Math.max(0,i-1)); showToast("Stepped back one workout.","info"); };
