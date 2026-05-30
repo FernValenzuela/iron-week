@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import PlansTab from "./PlansTab.jsx";
 import ProgressTab from "./ProgressTab.jsx";
+import * as cloudSync from "./cloudSync.js";
 export { makeCustomPlanId, makeCustomExerciseId, CUSTOM_PLAN_TAGS } from "./customPlans.js";
 
 // Constants
@@ -1362,9 +1363,126 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMo
     </div>
   );
 }
-function CloudSyncSection(){
-  // Placeholder; full implementation lands in the next commit.
-  return null;
+function formatSyncTimestamp(value){
+  if(!value) return "never";
+  try {
+    const d = new Date(value);
+    if(Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString(undefined, {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
+  } catch {
+    return value;
+  }
+}
+
+function CloudSyncSection({showToast}){
+  const [syncCfg,setSyncCfg] = useState(()=>cloudSync.getSyncConfig());
+  const [online,setOnline] = useState(()=>typeof navigator==="undefined"?true:navigator.onLine);
+  const [busy,setBusy] = useState("idle");
+  const [errorMsg,setErrorMsg] = useState("");
+
+  useEffect(()=>{
+    if(typeof window === "undefined") return;
+    const on  = ()=>setOnline(true);
+    const off = ()=>setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return ()=>{
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  },[]);
+
+  const refreshCfg = () => setSyncCfg(cloudSync.getSyncConfig());
+
+  const cardStyle  = {marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"};
+  const titleStyle = {margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"};
+  const helpStyle  = {margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5};
+
+  if(!cloudSync.isConfigured()){
+    return (
+      <div style={cardStyle}>
+        <p style={titleStyle}>Cloud sync</p>
+        <p style={{...helpStyle,margin:0}}>
+          Cloud sync not configured. Copy <code style={{color:"#A99CFF"}}>.env.example</code> to <code style={{color:"#A99CFF"}}>.env</code> and add your Supabase URL and anon key, then rebuild.
+        </p>
+      </div>
+    );
+  }
+
+  if(!online){
+    return (
+      <div style={cardStyle}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <p style={titleStyle}>Cloud sync</p>
+          <span style={{fontSize:11,fontWeight:700,color:"#F4B350",background:"#261A0A",border:"1px solid #D69E2E",borderRadius:6,padding:"2px 8px"}}>
+            <i className="ti ti-wifi-off" aria-hidden="true" style={{marginRight:4}}></i>Offline
+          </span>
+        </div>
+        <p style={{...helpStyle,margin:"6px 0 0"}}>
+          Sync is paused while offline. Everything still works locally; reconnect to push or pull.
+        </p>
+      </div>
+    );
+  }
+
+  const enableSync = async () => {
+    setBusy("enabling");
+    setErrorMsg("");
+    try {
+      await cloudSync.enableSync();
+      refreshCfg();
+      showToast("Cloud sync enabled","success");
+    } catch (err) {
+      if(err?.message === "CLOUD_PAUSED"){
+        showToast("Cloud sync unavailable — using local data","info");
+      } else {
+        setErrorMsg(err?.message || "Could not enable sync");
+        showToast("Could not enable cloud sync","danger");
+      }
+    } finally {
+      setBusy("idle");
+    }
+  };
+
+  if(!syncCfg?.enabled){
+    return (
+      <div style={cardStyle}>
+        <p style={titleStyle}>Cloud sync</p>
+        <p style={helpStyle}>
+          Optional. Pushes your full Iron Week state to Supabase so you can pull it onto another browser or device. Creates an anonymous account on first enable; no email required.
+        </p>
+        <Btn onClick={enableSync} disabled={busy!=="idle"} color="primary" style={{width:"100%",padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-cloud-upload" aria-hidden="true" style={{marginRight:5}}></i>
+          {busy==="enabling" ? "Enabling..." : "Enable cloud sync"}
+        </Btn>
+        {errorMsg && (
+          <p style={{margin:"8px 0 0",fontSize:11,color:"#F87171"}}>{errorMsg}</p>
+        )}
+      </div>
+    );
+  }
+
+  const shortId = syncCfg.userId ? `${syncCfg.userId.slice(0,8)}…` : "unknown";
+
+  return (
+    <div style={cardStyle}>
+      <p style={titleStyle}>Cloud sync</p>
+      <p style={{...helpStyle,margin:"0 0 8px"}}>
+        Account <span style={{color:"#A99CFF",fontFamily:"monospace"}}>{shortId}</span>. Last synced {formatSyncTimestamp(syncCfg.lastSyncedAt)}.
+      </p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+        <Btn disabled color="primary" style={{padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-cloud-upload" aria-hidden="true" style={{marginRight:5}}></i>Push
+        </Btn>
+        <Btn disabled color="default" style={{padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-cloud-download" aria-hidden="true" style={{marginRight:5}}></i>Pull
+        </Btn>
+      </div>
+      <Btn disabled color="muted" style={{width:"100%",padding:"7px 8px",fontWeight:700}}>
+        <i className="ti ti-cloud-off" aria-hidden="true" style={{marginRight:5}}></i>Disable sync
+      </Btn>
+    </div>
+  );
 }
 
 function Stat({label,value,color}){
