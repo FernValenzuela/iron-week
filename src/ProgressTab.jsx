@@ -120,8 +120,22 @@ export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
 
   const loaded = rc !== null;
 
+  const totalLogged = useMemo(()=> Object.keys(logs||{}).length,[logs]);
+
   return (
     <div>
+      <div style={CARD}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <p style={{margin:0,fontSize:11,color:"#8A97A8",fontWeight:500,textTransform:"uppercase",letterSpacing:"0.05em"}}>Progress</p>
+            <p style={{margin:"3px 0 0",fontSize:17,fontWeight:700,color:"#E6EDF3"}}>Trends</p>
+          </div>
+          <span style={{fontSize:11,padding:"3px 9px",borderRadius:6,background:"#0F2A22",color:"#57D39A",fontWeight:700,border:"1px solid #57D39A22"}}>
+            {totalLogged} {totalLogged === 1 ? "log" : "logs"}
+          </span>
+        </div>
+      </div>
+
       <div style={CARD}>
         <h3 style={SECTION_TITLE}>Weight progression</h3>
         <p style={SECTION_SUB}>Top set weight per exercise over time.</p>
