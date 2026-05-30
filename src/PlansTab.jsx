@@ -168,8 +168,10 @@ function ExerciseRow({exercise,idx,total,onChange,onMove,onDelete,advancedOpen,o
 }
 
 export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlans,showToast}){
-  const [editingPlan,setEditingPlan]   = useState(null);
-  const [openAdvanced,setOpenAdvanced] = useState(null);
+  const [editingPlan,setEditingPlan]         = useState(null);
+  const [openAdvanced,setOpenAdvanced]       = useState(null);
+  const [deletingId,setDeletingId]           = useState(null);
+  const [validationError,setValidationError] = useState(null);
 
   const inEditView = editingPlan !== null;
   const isNewPlan = inEditView && !customPlans.some(p=>p.id===editingPlan.id);
@@ -177,6 +179,7 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
   const startNewPlan = () => {
     setEditingPlan(makeBlankPlan());
     setOpenAdvanced(null);
+    setValidationError(null);
   };
 
   const startEditPlan = (plan) => {
@@ -187,18 +190,27 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
       exercises:(plan.exercises||[]).map(ex=>({...ex})),
     });
     setOpenAdvanced(null);
+    setValidationError(null);
+    setDeletingId(null);
   };
 
   const cancelEdit = () => {
     setEditingPlan(null);
     setOpenAdvanced(null);
+    setValidationError(null);
   };
 
   const saveEdit = () => {
     if(!editingPlan) return;
     const name = (editingPlan.name||"").trim();
-    if(!name) return;
-    if(!editingPlan.exercises || editingPlan.exercises.length===0) return;
+    if(!name){
+      setValidationError("Name required");
+      return;
+    }
+    if(!editingPlan.exercises || editingPlan.exercises.length===0){
+      setValidationError("Add at least one exercise");
+      return;
+    }
     const toSave = {...editingPlan,name};
     setCustomPlans(prev => {
       const idx = prev.findIndex(p=>p.id===toSave.id);
@@ -212,6 +224,13 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
     showToast("Plan saved","success");
     setEditingPlan(null);
     setOpenAdvanced(null);
+    setValidationError(null);
+  };
+
+  const confirmDelete = (id) => {
+    setCustomPlans(prev => prev.filter(p=>p.id!==id));
+    setDeletingId(null);
+    showToast("Plan deleted","success");
   };
 
   const updateExercise = (idx,next) => {
@@ -250,6 +269,9 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
   };
 
   if(inEditView){
+    const nameInvalid = (editingPlan.name||"").trim()==="";
+    const noExercises = editingPlan.exercises.length===0;
+    const saveDisabled = nameInvalid || noExercises;
     return (
       <div>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
@@ -262,10 +284,16 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
           <input
             type="text"
             value={editingPlan.name}
-            onChange={e=>setEditingPlan(prev=>({...prev,name:e.target.value}))}
+            onChange={e=>{
+              setEditingPlan(prev=>({...prev,name:e.target.value}));
+              if(validationError==="Name required") setValidationError(null);
+            }}
             placeholder="e.g. My Push Day"
             style={{...inputStyle,width:"100%"}}
           />
+          {nameInvalid && validationError==="Name required" && (
+            <p style={{margin:"6px 0 0",fontSize:12,color:"#F87171"}}>Name required</p>
+          )}
         </Section>
         <Section label="Tag">
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -301,6 +329,9 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
               onToggleAdvanced={()=>setOpenAdvanced(openAdvanced===ex.id ? null : ex.id)}
             />
           ))}
+          {noExercises && validationError==="Add at least one exercise" && (
+            <p style={{margin:"0 0 8px",fontSize:12,color:"#F87171"}}>Add at least one exercise</p>
+          )}
           <Btn onClick={addExercise} style={{width:"100%",padding:"9px 14px",fontWeight:600}}>
             <i className="ti ti-plus" style={{marginRight:6}} aria-hidden="true"></i>
             Add exercise
@@ -308,7 +339,7 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
         </Section>
         <div style={{display:"flex",gap:8,marginTop:16}}>
           <Btn onClick={cancelEdit} style={{flex:1,padding:"10px 14px",fontWeight:600}}>Cancel</Btn>
-          <Btn onClick={saveEdit} color="primary"
+          <Btn onClick={saveEdit} color="primary" disabled={saveDisabled}
                style={{flex:1,padding:"10px 14px",fontWeight:700}}>Save</Btn>
         </div>
       </div>
@@ -353,6 +384,7 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
                 const bg  = TAG_BG[tag] || "#1B1733";
                 const fg  = TAG_FG[tag] || "#A99CFF";
                 const exCount = (plan.exercises||[]).length;
+                const isDeleting = deletingId === plan.id;
                 return (
                   <div key={plan.id}
                        style={{background:"#0B121A",border:"1px solid #223044",borderRadius:10,padding:"10px 12px",marginBottom:8}}>
@@ -372,8 +404,21 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
                         </p>
                       </div>
                       <IconBtn onClick={()=>startEditPlan(plan)} icon="ti-pencil" title="Edit"/>
-                      <IconBtn onClick={()=>{}} icon="ti-trash" title="Delete" color="cross"/>
+                      <IconBtn onClick={()=>setDeletingId(plan.id)} icon="ti-trash" title="Delete" color="cross"/>
                     </div>
+                    {isDeleting && (
+                      <div style={{
+                        marginTop:10,padding:"8px 10px",
+                        background:"#351519",border:"1px solid #E53E3E",borderRadius:8,
+                        display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"
+                      }}>
+                        <p style={{margin:0,fontSize:12,color:"#F87171",flex:1,minWidth:120}}>
+                          Delete plan {plan.name || "(unnamed)"}?
+                        </p>
+                        <Btn onClick={()=>setDeletingId(null)} style={{padding:"5px 10px",fontSize:12}}>Cancel</Btn>
+                        <Btn onClick={()=>confirmDelete(plan.id)} color="danger" style={{padding:"5px 10px",fontSize:12,fontWeight:700}}>Delete</Btn>
+                      </div>
+                    )}
                   </div>
                 );
               })}
