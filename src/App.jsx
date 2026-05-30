@@ -1374,11 +1374,12 @@ function formatSyncTimestamp(value){
   }
 }
 
-function CloudSyncSection({showToast}){
+function CloudSyncSection({showToast,buildPayload,restoreBackup}){
   const [syncCfg,setSyncCfg] = useState(()=>cloudSync.getSyncConfig());
   const [online,setOnline] = useState(()=>typeof navigator==="undefined"?true:navigator.onLine);
   const [busy,setBusy] = useState("idle");
   const [errorMsg,setErrorMsg] = useState("");
+  const [pendingPull,setPendingPull] = useState(null);
 
   useEffect(()=>{
     if(typeof window === "undefined") return;
@@ -1462,7 +1463,63 @@ function CloudSyncSection({showToast}){
     );
   }
 
+  const handleSyncError = (err, fallback) => {
+    if(err?.message === "CLOUD_PAUSED"){
+      showToast("Cloud sync unavailable — using local data","info");
+    } else {
+      const m = err?.message || "Unknown error";
+      setErrorMsg(m);
+      showToast(`${fallback}: ${m}`,"danger");
+    }
+  };
+
+  const pushHandler = async () => {
+    setBusy("pushing");
+    setErrorMsg("");
+    try {
+      await cloudSync.pushState(buildPayload());
+      refreshCfg();
+      showToast("Pushed to cloud","success");
+    } catch (err) {
+      handleSyncError(err, "Push failed");
+    } finally {
+      setBusy("idle");
+    }
+  };
+
+  const pullHandler = async () => {
+    setBusy("pulling");
+    setErrorMsg("");
+    try {
+      const result = await cloudSync.pullState();
+      if(!result){
+        showToast("No cloud backup yet","info");
+      } else {
+        setPendingPull(result);
+      }
+    } catch (err) {
+      handleSyncError(err, "Pull failed");
+    } finally {
+      setBusy("idle");
+    }
+  };
+
+  const confirmPull = () => {
+    if(!pendingPull) return;
+    restoreBackup(pendingPull.state);
+    refreshCfg();
+    setPendingPull(null);
+  };
+
+  const disableHandler = () => {
+    cloudSync.disableSync();
+    refreshCfg();
+    setPendingPull(null);
+    showToast("Sync disabled","info");
+  };
+
   const shortId = syncCfg.userId ? `${syncCfg.userId.slice(0,8)}…` : "unknown";
+  const isBusy = busy !== "idle";
 
   return (
     <div style={cardStyle}>
@@ -1471,16 +1528,36 @@ function CloudSyncSection({showToast}){
         Account <span style={{color:"#A99CFF",fontFamily:"monospace"}}>{shortId}</span>. Last synced {formatSyncTimestamp(syncCfg.lastSyncedAt)}.
       </p>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-        <Btn disabled color="primary" style={{padding:"9px 8px",fontWeight:700}}>
-          <i className="ti ti-cloud-upload" aria-hidden="true" style={{marginRight:5}}></i>Push
+        <Btn onClick={pushHandler} disabled={isBusy} color="primary" style={{padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-cloud-upload" aria-hidden="true" style={{marginRight:5}}></i>
+          {busy==="pushing" ? "Pushing..." : "Push"}
         </Btn>
-        <Btn disabled color="default" style={{padding:"9px 8px",fontWeight:700}}>
-          <i className="ti ti-cloud-download" aria-hidden="true" style={{marginRight:5}}></i>Pull
+        <Btn onClick={pullHandler} disabled={isBusy} color="default" style={{padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-cloud-download" aria-hidden="true" style={{marginRight:5}}></i>
+          {busy==="pulling" ? "Pulling..." : "Pull"}
         </Btn>
       </div>
-      <Btn disabled color="muted" style={{width:"100%",padding:"7px 8px",fontWeight:700}}>
+      {pendingPull && (
+        <div style={{background:"#101923",border:"1px solid #2C3A4F",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+          <p style={{margin:"0 0 8px",fontSize:12,color:"#E6EDF3",lineHeight:1.4}}>
+            Replace local data with cloud backup from <strong style={{color:"#A99CFF"}}>{formatSyncTimestamp(pendingPull.syncedAt)}</strong>?
+          </p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <Btn onClick={()=>setPendingPull(null)} color="muted" style={{padding:"7px 8px",fontWeight:700}}>
+              Cancel
+            </Btn>
+            <Btn onClick={confirmPull} color="primary" style={{padding:"7px 8px",fontWeight:700}}>
+              Confirm pull
+            </Btn>
+          </div>
+        </div>
+      )}
+      <Btn onClick={disableHandler} disabled={isBusy} color="muted" style={{width:"100%",padding:"7px 8px",fontWeight:700}}>
         <i className="ti ti-cloud-off" aria-hidden="true" style={{marginRight:5}}></i>Disable sync
       </Btn>
+      {errorMsg && (
+        <p style={{margin:"8px 0 0",fontSize:11,color:"#F87171"}}>{errorMsg}</p>
+      )}
     </div>
   );
 }
