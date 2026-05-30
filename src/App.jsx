@@ -490,7 +490,9 @@ export default function App(){
     if(!data || typeof data !== "object") throw new Error("Invalid backup");
     if(data.benchWeight != null) setBenchWeight(data.benchWeight);
     if(data.nextWorkoutIdx != null) setNextWorkoutIdx(data.nextWorkoutIdx);
-    if(data.usePlanA != null) setUsePlanA(!!data.usePlanA);
+    if(typeof data.planMode === "string") setPlanMode(data.planMode);
+    else if(data.usePlanA != null) setPlanMode(data.usePlanA ? "planA" : "planB");
+    if(Array.isArray(data.customPlans)) setCustomPlans(data.customPlans);
     if(data.volumeMod) setVolumeMod(data.volumeMod);
     if(data.workoutVariants && typeof data.workoutVariants === "object") setWorkoutVariants(data.workoutVariants);
     if(data.logs && typeof data.logs === "object") setLogs(data.logs);
@@ -527,7 +529,7 @@ export default function App(){
       <div style={{padding:"1rem 1rem 0.25rem",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <h2 style={{fontSize:19,fontWeight:800,margin:0,color:"#F8FAFC"}}>Iron Week</h2>
         <span style={{fontSize:11,color:"#8A97A8",background:"#0B121A",padding:"3px 8px",borderRadius:6,border:"1px solid #223044"}}>
-          {usePlanA?"Plan A · 4-day":"Plan B · 3-day"}
+          {planMode==="custom" ? "Custom" : planMode==="planB" ? "Plan B · 3-day" : "Plan A · 4-day"}
         </span>
       </div>
 
@@ -566,7 +568,7 @@ export default function App(){
           review={review} setReview={setReview} showToast={showToast}
           nextWorkoutIdx={nextWorkoutIdx} plan={plan} logs={logs} weekKey={weekKey} />}
         {tab==="checkin" && <CheckinTab checkin={checkin} setCheckin={setCheckin} showToast={showToast}
-          logs={logs} review={review} benchWeight={benchWeight} usePlanA={usePlanA}
+          logs={logs} review={review} benchWeight={benchWeight} planMode={planMode} customPlans={customPlans}
           volumeMod={volumeMod} workoutVariants={workoutVariants} plan={plan}
           nextWorkoutIdx={nextWorkoutIdx} weekKey={weekKey}
           macroFactor={macroFactor} setMacroFactor={setMacroFactor} restoreBackup={restoreBackup} />}
@@ -1084,15 +1086,16 @@ function RecRow({icon,label,value,color}){
   );
 }
 
-function buildBackup({checkin,logs,review,benchWeight,nextWorkoutIdx,usePlanA,volumeMod,workoutVariants,macroFactor}){
+function buildBackup({checkin,logs,review,benchWeight,nextWorkoutIdx,planMode,customPlans,volumeMod,workoutVariants,macroFactor}){
   return {
     app:"Iron Week",
-    schemaVersion:2,
+    schemaVersion:3,
     exportedAt:new Date().toISOString(),
     data:{
       benchWeight,
       nextWorkoutIdx,
-      usePlanA,
+      planMode,
+      customPlans,
       volumeMod,
       workoutVariants,
       logs,
@@ -1103,14 +1106,16 @@ function buildBackup({checkin,logs,review,benchWeight,nextWorkoutIdx,usePlanA,vo
   };
 }
 
-function buildAiExport({checkin,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor}){
+const PLAN_MODE_LABEL = {planA:"Plan A - 4 day", planB:"Plan B - 3 day", custom:"Custom"};
+
+function buildAiExport({checkin,logs,review,benchWeight,planMode,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor}){
   return {
     app:"Iron Week",
     exportedAt:new Date().toISOString(),
     currentWeek:weekKey,
     state:{
       benchWeight,
-      activePlan:usePlanA?"Plan A - 4 day":"Plan B - 3 day",
+      activePlan:PLAN_MODE_LABEL[planMode]||PLAN_MODE_LABEL.planA,
       volumeMod,
       nextWorkoutIdx,
       workoutVariants,
@@ -1146,16 +1151,16 @@ function buildAiExport({checkin,logs,review,benchWeight,usePlanA,volumeMod,worko
 }
 
 // Check-in Tab
-function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor,setMacroFactor,restoreBackup}){
+function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMode,customPlans,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor,setMacroFactor,restoreBackup}){
   const [macroPaste,setMacroPaste] = useState("");
   const upd = (k,v)=>setCheckin(c=>({...c,[k]:v}));
   const pColor = checkin.protein>=180?"#57D39A":checkin.protein>0?"#F4B350":"#64748B";
   const sColor = checkin.sleep>=7?"#57D39A":checkin.sleep>=5?"#F4B350":"#F87171";
   const backupPayload = () => buildBackup({
-    checkin, logs, review, benchWeight, nextWorkoutIdx, usePlanA, volumeMod, workoutVariants, macroFactor,
+    checkin, logs, review, benchWeight, nextWorkoutIdx, planMode, customPlans, volumeMod, workoutVariants, macroFactor,
   });
   const exportPayload = () => JSON.stringify(buildAiExport({
-    checkin, logs, review, benchWeight, usePlanA, volumeMod, workoutVariants, plan, nextWorkoutIdx, weekKey, macroFactor,
+    checkin, logs, review, benchWeight, planMode, volumeMod, workoutVariants, plan, nextWorkoutIdx, weekKey, macroFactor,
   }), null, 2);
   const copyAiExport = async () => {
     try {
