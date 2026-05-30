@@ -1,18 +1,37 @@
+import {useState,useEffect} from "react";
+
+const CARD = {background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px",marginBottom:12};
+const SECTION_TITLE = {fontSize:13,fontWeight:800,color:"#E6EDF3",margin:"0 0 4px"};
+const SECTION_SUB   = {fontSize:11,color:"#8A97A8",margin:"0 0 10px"};
+const SKELETON      = {height:200,background:"#101923",borderRadius:8};
+
 export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
-  const logCount = Object.keys(logs||{}).length;
+  const [rc,setRc] = useState(null);
+
+  useEffect(()=>{
+    let cancelled = false;
+    import("recharts").then(mod => { if(!cancelled) setRc(mod); }).catch(()=>{});
+    return ()=>{ cancelled = true; };
+  },[]);
+
   return (
     <div>
-      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 6px",color:"#E6EDF3"}}>Progress charts</h3>
-      <p style={{margin:"0 0 12px",fontSize:13,color:"#8A97A8",lineHeight:1.5}}>
-        Plan 03 will build this. Hooks for logs, check-in, MacroFactor, and the current week are already in place.
-      </p>
-      <div style={{background:"#0B121A",border:"1px solid #223044",borderRadius:10,padding:"12px 14px"}}>
-        <p style={{margin:0,fontSize:12,color:"#8A97A8"}}>
-          Week: <span style={{color:"#E6EDF3",fontWeight:700}}>{weekKey}</span>
-        </p>
-        <p style={{margin:"4px 0 0",fontSize:12,color:"#8A97A8"}}>
-          Logged sessions: <span style={{color:"#E6EDF3",fontWeight:700}}>{logCount}</span>
-        </p>
+      <div style={CARD}>
+        <h3 style={SECTION_TITLE}>Weight progression</h3>
+        <p style={SECTION_SUB}>Top set weight per exercise over time.</p>
+        <div style={SKELETON} />
+      </div>
+
+      <div style={CARD}>
+        <h3 style={SECTION_TITLE}>Weekly completion</h3>
+        <p style={SECTION_SUB}>Share of sessions completed (not skipped), last 8 weeks.</p>
+        <div style={SKELETON} />
+      </div>
+
+      <div style={CARD}>
+        <h3 style={SECTION_TITLE}>Bodyweight trend</h3>
+        <p style={SECTION_SUB}>Daily scale weight (solid) and smoothed trend (dashed).</p>
+        <div style={SKELETON} />
       </div>
     </div>
   );
