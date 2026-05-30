@@ -85,6 +85,42 @@ function makeBlankPlan(){
   return {id:makeCustomPlanId(),name:"",tag:"PUSH",exercises:[makeBlankExercise()]};
 }
 
+function ExerciseRow({exercise,idx,total,onChange,onMove,onDelete}){
+  const update = (field,value) => onChange(idx,{...exercise,[field]:value});
+  return (
+    <div style={{background:"#0B121A",border:"1px solid #223044",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <input
+          type="text"
+          value={exercise.name}
+          onChange={e=>update("name",e.target.value)}
+          placeholder="Exercise name"
+          style={{...inputStyle,flex:1,minWidth:0}}
+        />
+        <input
+          type="text"
+          value={exercise.sets}
+          onChange={e=>update("sets",e.target.value)}
+          placeholder="Sets"
+          style={{...inputStyle,width:50,textAlign:"center",padding:"7px 6px"}}
+        />
+        <input
+          type="text"
+          value={exercise.reps}
+          onChange={e=>update("reps",e.target.value)}
+          placeholder="Reps"
+          style={{...inputStyle,width:70,textAlign:"center",padding:"7px 6px"}}
+        />
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginTop:6,gap:2}}>
+        <IconBtn onClick={()=>onMove(idx,-1)} icon="ti-arrow-up" title="Move up" disabled={idx===0}/>
+        <IconBtn onClick={()=>onMove(idx,1)}  icon="ti-arrow-down" title="Move down" disabled={idx===total-1}/>
+        <IconBtn onClick={()=>onDelete(idx)}  icon="ti-x" title="Remove" color="cross"/>
+      </div>
+    </div>
+  );
+}
+
 export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlans,showToast}){
   const [editingPlan,setEditingPlan] = useState(null);
 
@@ -134,6 +170,27 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
     setEditingPlan(prev => prev ? {...prev,exercises:[...prev.exercises,makeBlankExercise()]} : prev);
   };
 
+  const moveExercise = (idx,direction) => {
+    setEditingPlan(prev => {
+      if(!prev) return prev;
+      const target = idx + direction;
+      if(target < 0 || target >= prev.exercises.length) return prev;
+      const exercises = prev.exercises.slice();
+      const [item] = exercises.splice(idx,1);
+      exercises.splice(target,0,item);
+      return {...prev,exercises};
+    });
+  };
+
+  const deleteExercise = (idx) => {
+    setEditingPlan(prev => {
+      if(!prev) return prev;
+      const exercises = prev.exercises.slice();
+      exercises.splice(idx,1);
+      return {...prev,exercises};
+    });
+  };
+
   if(inEditView){
     return (
       <div>
@@ -174,31 +231,15 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
         </Section>
         <Section label={`Exercises (${editingPlan.exercises.length})`}>
           {editingPlan.exercises.map((ex,idx)=>(
-            <div key={ex.id} style={{background:"#0B121A",border:"1px solid #223044",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <input
-                  type="text"
-                  value={ex.name}
-                  onChange={e=>updateExercise(idx,{...ex,name:e.target.value})}
-                  placeholder="Exercise name"
-                  style={{...inputStyle,flex:1,minWidth:0}}
-                />
-                <input
-                  type="text"
-                  value={ex.sets}
-                  onChange={e=>updateExercise(idx,{...ex,sets:e.target.value})}
-                  placeholder="Sets"
-                  style={{...inputStyle,width:50,textAlign:"center",padding:"7px 6px"}}
-                />
-                <input
-                  type="text"
-                  value={ex.reps}
-                  onChange={e=>updateExercise(idx,{...ex,reps:e.target.value})}
-                  placeholder="Reps"
-                  style={{...inputStyle,width:70,textAlign:"center",padding:"7px 6px"}}
-                />
-              </div>
-            </div>
+            <ExerciseRow
+              key={ex.id}
+              exercise={ex}
+              idx={idx}
+              total={editingPlan.exercises.length}
+              onChange={updateExercise}
+              onMove={moveExercise}
+              onDelete={deleteExercise}
+            />
           ))}
           <Btn onClick={addExercise} style={{width:"100%",padding:"9px 14px",fontWeight:600}}>
             <i className="ti ti-plus" style={{marginRight:6}} aria-hidden="true"></i>
