@@ -259,6 +259,125 @@ const ls = {
   set:(k,v)=>{ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} }
 };
 const isoWeek = () => { const t=new Date(); t.setHours(0,0,0,0); t.setDate(t.getDate()-t.getDay()); return t.toISOString().slice(0,10); };
+const emptyMacroFactor = {importedAt:null,fileName:"",rows:[],summary:null};
+
+const downloadJsonFile = (payload, fileName) => {
+  const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+const parseCsv = text => {
+  const out = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for(let i=0;i<text.length;i++){
+    const ch = text[i];
+    const next = text[i+1];
+    if(ch === "\""){
+      if(inQuotes && next === "\""){
+        cell += "\"";
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if(ch === "," && !inQuotes){
+      row.push(cell);
+      cell = "";
+    } else if((ch === "\n" || ch === "\r") && !inQuotes){
+      if(ch === "\r" && next === "\n") i += 1;
+      row.push(cell);
+      if(row.some(v=>String(v).trim() !== "")) out.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += ch;
+    }
+  }
+
+  row.push(cell);
+  if(row.some(v=>String(v).trim() !== "")) out.push(row);
+  if(out.length < 2) return [];
+
+  const headers = out[0].map(h=>String(h).trim());
+  return out.slice(1).map(cells => headers.reduce((acc,h,i)=>({...acc,[h]:cells[i] ?? ""}),{}));
+};
+
+const normalizeHeader = value => String(value||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+const findField = (row, names) => {
+  const indexed = Object.keys(row).reduce((acc,key)=>({...acc,[normalizeHeader(key)]:row[key]}),{});
+  for(const name of names){
+    const exact = normalizeHeader(name);
+    if(indexed[exact] != null) return indexed[exact];
+  }
+  for(const key of Object.keys(indexed)){
+    if(names.some(name=>key.includes(normalizeHeader(name)))) return indexed[key];
+  }
+  return "";
+};
+const toNumber = value => {
+  const cleaned = String(value ?? "").replace(/[^0-9.-]/g,"");
+  if(!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+};
+const avg = values => {
+  const xs = values.filter(v=>Number.isFinite(v));
+  return xs.length ? Math.round((xs.reduce((sum,v)=>sum+v,0)/xs.length)*10)/10 : null;
+};
+const parseMacroFactorCsv = (text, fileName="MacroFactor CSV") => {
+  const rows = parseCsv(text).map(row => ({
+    date:String(findField(row,["date","day","start date"])).trim(),
+    calories:toNumber(findField(row,["calories","calorie intake","energy","kcal"])),
+    protein:toNumber(findField(row,["protein","protein g","protein grams"])),
+    carbs:toNumber(findField(row,["carbs","carbohydrates","carbs g","carbohydrate grams"])),
+    fat:toNumber(findField(row,["fat","fat g","fat grams","total fat"])),
+    scaleWeight:toNumber(findField(row,["scale weight","weight","bodyweight","body weight"])),
+    weightTrend:toNumber(findField(row,["weight trend","trend weight"])),
+    expenditure:toNumber(findField(row,["expenditure","energy expenditure","tdee"])),
+    raw:row,
+  })).filter(row => row.date || ["calories","protein","carbs","fat","scaleWeight","weightTrend","expenditure"].some(k=>Number.isFinite(row[k])));
+
+  const dated = rows.filter(r=>r.date);
+  const latest = [...rows].reverse().find(Boolean) || null;
+  return {
+    importedAt:new Date().toISOString(),
+    fileName,
+    rows,
+    summary:{
+      rowCount:rows.length,
+      dateRange:{
+        start:dated[0]?.date || null,
+        end:dated[dated.length-1]?.date || null,
+      },
+      averages:{
+        calories:avg(rows.map(r=>r.calories)),
+        protein:avg(rows.map(r=>r.protein)),
+        carbs:avg(rows.map(r=>r.carbs)),
+        fat:avg(rows.map(r=>r.fat)),
+        scaleWeight:avg(rows.map(r=>r.scaleWeight)),
+        weightTrend:avg(rows.map(r=>r.weightTrend)),
+        expenditure:avg(rows.map(r=>r.expenditure)),
+      },
+      latest:latest ? {
+        date:latest.date || null,
+        calories:latest.calories,
+        protein:latest.protein,
+        carbs:latest.carbs,
+        fat:latest.fat,
+        scaleWeight:latest.scaleWeight,
+        weightTrend:latest.weightTrend,
+        expenditure:latest.expenditure,
+      } : null,
+    },
+  };
+};
 
 // Shared button style helper
 const btnBase = {cursor:"pointer",transition:"filter 0.15s, transform 0.1s"};
@@ -320,6 +439,7 @@ export default function App(){
   const [logs,setLogs]                     = useState(()=>ls.get("logs",{}));
   const [checkin,setCheckin]               = useState(()=>ls.get("checkin",{bw:"",cals:"",protein:"",sleep:5,notes:""}));
   const [review,setReview]                 = useState(()=>ls.get("review",null));
+  const [macroFactor,setMacroFactor]       = useState(()=>ls.get("macroFactor",emptyMacroFactor));
   const weekKey = isoWeek();
 
   useEffect(()=>ls.set("benchWeight",benchWeight),[benchWeight]);
@@ -330,6 +450,7 @@ export default function App(){
   useEffect(()=>ls.set("logs",logs),[logs]);
   useEffect(()=>ls.set("checkin",checkin),[checkin]);
   useEffect(()=>ls.set("review",review),[review]);
+  useEffect(()=>ls.set("macroFactor",macroFactor),[macroFactor]);
 
   const showToast = useCallback((msg,type="info")=>{
     setToast({msg,type}); setTimeout(()=>setToast(null),3000);
@@ -343,6 +464,21 @@ export default function App(){
       return next;
     });
     showToast("Variation set","info");
+  },[showToast]);
+
+  const restoreBackup = useCallback(backup => {
+    const data = backup?.data || backup;
+    if(!data || typeof data !== "object") throw new Error("Invalid backup");
+    if(data.benchWeight != null) setBenchWeight(data.benchWeight);
+    if(data.nextWorkoutIdx != null) setNextWorkoutIdx(data.nextWorkoutIdx);
+    if(data.usePlanA != null) setUsePlanA(!!data.usePlanA);
+    if(data.volumeMod) setVolumeMod(data.volumeMod);
+    if(data.workoutVariants && typeof data.workoutVariants === "object") setWorkoutVariants(data.workoutVariants);
+    if(data.logs && typeof data.logs === "object") setLogs(data.logs);
+    if(data.checkin && typeof data.checkin === "object") setCheckin(data.checkin);
+    if("review" in data) setReview(data.review);
+    if(data.macroFactor && typeof data.macroFactor === "object") setMacroFactor(data.macroFactor);
+    showToast("Backup restored","success");
   },[showToast]);
 
   const basePlan = usePlanA ? PLAN_4 : PLAN_3;
@@ -407,7 +543,8 @@ export default function App(){
         {tab==="checkin" && <CheckinTab checkin={checkin} setCheckin={setCheckin} showToast={showToast}
           logs={logs} review={review} benchWeight={benchWeight} usePlanA={usePlanA}
           volumeMod={volumeMod} workoutVariants={workoutVariants} plan={plan}
-          nextWorkoutIdx={nextWorkoutIdx} weekKey={weekKey} />}
+          nextWorkoutIdx={nextWorkoutIdx} weekKey={weekKey}
+          macroFactor={macroFactor} setMacroFactor={setMacroFactor} restoreBackup={restoreBackup} />}
       </div>
 
       {toast && (
@@ -922,7 +1059,26 @@ function RecRow({icon,label,value,color}){
   );
 }
 
-function buildAiExport({checkin,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey}){
+function buildBackup({checkin,logs,review,benchWeight,nextWorkoutIdx,usePlanA,volumeMod,workoutVariants,macroFactor}){
+  return {
+    app:"Iron Week",
+    schemaVersion:2,
+    exportedAt:new Date().toISOString(),
+    data:{
+      benchWeight,
+      nextWorkoutIdx,
+      usePlanA,
+      volumeMod,
+      workoutVariants,
+      logs,
+      checkin,
+      review,
+      macroFactor,
+    },
+  };
+}
+
+function buildAiExport({checkin,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor}){
   return {
     app:"Iron Week",
     exportedAt:new Date().toISOString(),
@@ -953,22 +1109,28 @@ function buildAiExport({checkin,logs,review,benchWeight,usePlanA,volumeMod,worko
     })),
     logs,
     checkin,
+    macroFactor,
     review,
     notesForAi:[
       "Logs are stored locally in this browser only.",
       "Each log key maps to a week/workout/variation and includes completed exercise ids, skipped exercise ids, per-exercise weight, per-set reps, pain, and notes.",
       "Barbell bench rehab data is paused in the active templates; bench progression logic remains in Review for future return.",
+      "MacroFactor data is manually imported from the MacroFactor CSV export when present.",
     ],
   };
 }
 
 // Check-in Tab
-function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey}){
+function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,usePlanA,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor,setMacroFactor,restoreBackup}){
+  const [macroPaste,setMacroPaste] = useState("");
   const upd = (k,v)=>setCheckin(c=>({...c,[k]:v}));
   const pColor = checkin.protein>=180?"#57D39A":checkin.protein>0?"#F4B350":"#64748B";
   const sColor = checkin.sleep>=7?"#57D39A":checkin.sleep>=5?"#F4B350":"#F87171";
+  const backupPayload = () => buildBackup({
+    checkin, logs, review, benchWeight, nextWorkoutIdx, usePlanA, volumeMod, workoutVariants, macroFactor,
+  });
   const exportPayload = () => JSON.stringify(buildAiExport({
-    checkin, logs, review, benchWeight, usePlanA, volumeMod, workoutVariants, plan, nextWorkoutIdx, weekKey,
+    checkin, logs, review, benchWeight, usePlanA, volumeMod, workoutVariants, plan, nextWorkoutIdx, weekKey, macroFactor,
   }), null, 2);
   const copyAiExport = async () => {
     try {
@@ -979,15 +1141,45 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,usePla
     }
   };
   const downloadAiExport = () => {
-    const blob = new Blob([exportPayload()], {type:"application/json"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `iron-week-${weekKey}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadJsonFile(JSON.parse(exportPayload()), `iron-week-ai-${weekKey}.json`);
     showToast("AI export downloaded","success");
   };
+  const downloadBackup = () => {
+    downloadJsonFile(backupPayload(), `iron-week-backup-${weekKey}.json`);
+    showToast("Backup downloaded","success");
+  };
+  const importBackupFile = async event => {
+    const file = event.target.files?.[0];
+    if(!file) return;
+    try {
+      restoreBackup(JSON.parse(await file.text()));
+    } catch {
+      showToast("Could not restore backup","danger");
+    } finally {
+      event.target.value = "";
+    }
+  };
+  const importMacroFactorText = (text, fileName="Pasted MacroFactor CSV") => {
+    try {
+      const parsed = parseMacroFactorCsv(text, fileName);
+      if(!parsed.rows.length){
+        showToast("No MacroFactor rows found","danger");
+        return;
+      }
+      setMacroFactor(parsed);
+      setMacroPaste("");
+      showToast(`Imported ${parsed.rows.length} MacroFactor rows`,"success");
+    } catch {
+      showToast("Could not read MacroFactor CSV","danger");
+    }
+  };
+  const importMacroFactorFile = async event => {
+    const file = event.target.files?.[0];
+    if(!file) return;
+    importMacroFactorText(await file.text(), file.name);
+    event.target.value = "";
+  };
+  const macroSummary = macroFactor?.summary;
   return (
     <div>
       <h3 style={{fontSize:16,fontWeight:700,margin:"0 0 1rem"}}>Weekly check-in</h3>
@@ -1034,9 +1226,68 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,usePla
         <i className="ti ti-device-floppy" aria-hidden="true" style={{marginRight:6}}></i>Save check-in
       </Btn>
       <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
+        <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>Backup / restore</p>
+        <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
+          Saves your full Iron Week state from this browser: workouts, logs, notes, pain, check-ins, review, variations, and MacroFactor import.
+        </p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Btn onClick={downloadBackup} color="primary" style={{padding:"9px 8px",fontWeight:700}}>
+            <i className="ti ti-database-export" aria-hidden="true" style={{marginRight:5}}></i>Backup
+          </Btn>
+          <label style={{display:"block"}}>
+            <input type="file" accept="application/json,.json" onChange={importBackupFile} style={{display:"none"}} />
+            <span style={{
+              display:"block",textAlign:"center",cursor:"pointer",border:"1px solid #2C3A4F",
+              background:"#101923",color:"#E6EDF3",borderRadius:8,padding:"9px 8px",fontSize:13,fontWeight:700,
+            }}>
+              <i className="ti ti-database-import" aria-hidden="true" style={{marginRight:5}}></i>Restore
+            </span>
+          </label>
+        </div>
+      </div>
+      <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
+        <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>MacroFactor import</p>
+        <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
+          Export CSV from MacroFactor, then upload or paste it here. Iron Week stores it locally and includes it in backups and AI analysis.
+        </p>
+        {macroSummary?.rowCount > 0 && (
+          <div style={{background:"#101923",border:"1px solid #223044",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+            <p style={{margin:"0 0 6px",fontSize:12,fontWeight:800,color:"#A99CFF"}}>
+              {macroSummary.rowCount} rows imported{macroFactor.fileName?` from ${macroFactor.fileName}`:""}
+            </p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <Stat label="Range" value={`${macroSummary.dateRange?.start || "?"} - ${macroSummary.dateRange?.end || "?"}`} />
+              {macroSummary.averages?.calories != null && <Stat label="Avg calories" value={`${macroSummary.averages.calories} kcal`} />}
+              {macroSummary.averages?.protein != null && <Stat label="Avg protein" value={`${macroSummary.averages.protein}g`} color={macroSummary.averages.protein>=180?"#57D39A":"#F4B350"} />}
+              {macroSummary.latest?.scaleWeight != null && <Stat label="Latest weight" value={`${macroSummary.latest.scaleWeight} lb`} />}
+            </div>
+          </div>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <label style={{display:"block"}}>
+            <input type="file" accept=".csv,text/csv" onChange={importMacroFactorFile} style={{display:"none"}} />
+            <span style={{
+              display:"block",textAlign:"center",cursor:"pointer",border:"1px solid #2C3A4F",
+              background:"#101923",color:"#E6EDF3",borderRadius:8,padding:"9px 8px",fontSize:13,fontWeight:700,
+            }}>
+              <i className="ti ti-file-upload" aria-hidden="true" style={{marginRight:5}}></i>Upload CSV
+            </span>
+          </label>
+          <Btn onClick={()=>setMacroFactor(emptyMacroFactor)} color="muted" style={{padding:"9px 8px",fontWeight:700}}>
+            <i className="ti ti-trash" aria-hidden="true" style={{marginRight:5}}></i>Clear
+          </Btn>
+        </div>
+        <textarea value={macroPaste} onChange={e=>setMacroPaste(e.target.value)}
+          placeholder="Paste MacroFactor CSV here..." rows={4}
+          style={{display:"block",width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",fontSize:12,border:"1px solid #2C3A4F",borderRadius:8,padding:"8px 10px",marginBottom:8}} />
+        <Btn onClick={()=>importMacroFactorText(macroPaste)} disabled={!macroPaste.trim()} color="muted" style={{width:"100%",padding:"9px 8px",fontWeight:700}}>
+          <i className="ti ti-table-import" aria-hidden="true" style={{marginRight:5}}></i>Import pasted CSV
+        </Btn>
+      </div>
+      <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
         <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>AI analysis export</p>
         <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
-          Includes check-ins, review answers, plan settings, selected variations, skipped work, pain, notes, weight, and per-set reps from this browser.
+          Includes check-ins, MacroFactor import, review answers, plan settings, selected variations, skipped work, pain, notes, weight, and per-set reps from this browser.
         </p>
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={copyAiExport} color="muted" style={{flex:1,padding:"9px 8px",fontWeight:700}}>

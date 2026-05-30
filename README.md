@@ -30,6 +30,14 @@ The temporary bench pause is applied:
 - Add DB flyes as a secondary option at `3x10-15`.
 - Keep the Review bench progression rules dormant for when barbell bench returns.
 
+## Data
+
+The app is still local-first and single-user. Check-in includes:
+
+- Full JSON backup / restore for the browser's Iron Week data.
+- MacroFactor CSV import from MacroFactor's Data Export screen.
+- AI analysis export that includes workout logs, review data, check-ins, selected variations, and imported MacroFactor nutrition/weight data.
+
 ## Deployment
 
-Import this private repo into Vercel and use the Vite framework preset.
+GitHub Pages deploys from `.github/workflows/deploy.yml`.
