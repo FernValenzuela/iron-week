@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import PlansTab from "./PlansTab.jsx";
+import ProgressTab from "./ProgressTab.jsx";
+export { makeCustomPlanId, makeCustomExerciseId, CUSTOM_PLAN_TAGS } from "./customPlans.js";
 
 // Constants
 const DAYS_FULL = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
@@ -510,18 +513,16 @@ export default function App(){
   const logKey = currentWorkout ? workoutLogKey(weekKey,currentWorkout) : "";
   const wlog   = logs[logKey]||{completed:[],skipped:[],sets:{}};
 
-  // Bridge for existing tab props that still take usePlanA; T03/T04 migrate them off.
-  const usePlanA = planMode==="planA";
-  const setUsePlanA = useCallback(v=>setPlanMode(v?"planA":"planB"),[]);
-
   const completeWorkout = () => { setNextWorkoutIdx(i=>i+1); showToast("Workout logged. Rest up!","success"); };
   const undoWorkout     = () => { setNextWorkoutIdx(i=>Math.max(0,i-1)); showToast("Stepped back one workout.","info"); };
 
   const TABS = [
-    {id:"today",   icon:"ti-player-play",   label:"Today",    ac:"#57D39A", bg:"#0F2A22"},
-    {id:"week",    icon:"ti-calendar",      label:"Week",     ac:"#60A5FA", bg:"#0C1E31"},
-    {id:"review",  icon:"ti-clipboard-list",label:"Review",   ac:"#F4B350", bg:"#261A0A"},
-    {id:"checkin", icon:"ti-chart-line",    label:"Check-in", ac:"#A99CFF", bg:"#1B1733"},
+    {id:"today",    icon:"ti-player-play",      label:"Today",    ac:"#57D39A", bg:"#0F2A22"},
+    {id:"week",     icon:"ti-calendar",         label:"Week",     ac:"#60A5FA", bg:"#0C1E31"},
+    {id:"plans",    icon:"ti-clipboard",        label:"Plans",    ac:"#A99CFF", bg:"#1B1733"},
+    {id:"progress", icon:"ti-chart-line",       label:"Progress", ac:"#57D39A", bg:"#0F2A22"},
+    {id:"review",   icon:"ti-clipboard-list",   label:"Review",   ac:"#F4B350", bg:"#261A0A"},
+    {id:"checkin",  icon:"ti-heart-handshake",  label:"Check-in", ac:"#A99CFF", bg:"#1B1733"},
   ];
 
   return (
@@ -555,16 +556,23 @@ export default function App(){
       </div>
 
       <div style={{padding:"0 1rem"}}>
-        {tab==="today"   && <TodayTab workout={currentWorkout} wlog={wlog} logs={logs} setLogs={setLogs}
-          benchWeight={benchWeight} weekKey={weekKey} logKey={logKey}
-          setWorkoutVariant={setWorkoutVariant}
-          completeWorkout={completeWorkout} undoWorkout={undoWorkout} showToast={showToast}
-          volumeMod={volumeMod} plan={plan} nextIdx={nextWorkoutIdx} />}
+        {tab==="today" && (currentWorkout
+          ? <TodayTab workout={currentWorkout} wlog={wlog} logs={logs} setLogs={setLogs}
+              benchWeight={benchWeight} weekKey={weekKey} logKey={logKey}
+              setWorkoutVariant={setWorkoutVariant}
+              completeWorkout={completeWorkout} undoWorkout={undoWorkout} showToast={showToast}
+              volumeMod={volumeMod} plan={plan} nextIdx={nextWorkoutIdx} />
+          : <EmptyPlanNotice setTab={setTab} />)}
         {tab==="week"    && <WeekTab plan={plan} nextIdx={nextWorkoutIdx} logs={logs} weekKey={weekKey}
           setWorkoutVariant={setWorkoutVariant}
           setNextWorkoutIdx={setNextWorkoutIdx} setTab={setTab} showToast={showToast} />}
+        {tab==="plans"    && <PlansTab planMode={planMode} setPlanMode={setPlanMode}
+          customPlans={customPlans} setCustomPlans={setCustomPlans} showToast={showToast} />}
+        {tab==="progress" && <ProgressTab logs={logs} checkin={checkin}
+          macroFactor={macroFactor} weekKey={weekKey} />}
         {tab==="review"  && <ReviewTab benchWeight={benchWeight} setBenchWeight={setBenchWeight}
-          usePlanA={usePlanA} setUsePlanA={setUsePlanA} volumeMod={volumeMod} setVolumeMod={setVolumeMod}
+          planMode={planMode} setPlanMode={setPlanMode}
+          volumeMod={volumeMod} setVolumeMod={setVolumeMod}
           review={review} setReview={setReview} showToast={showToast}
           nextWorkoutIdx={nextWorkoutIdx} plan={plan} logs={logs} weekKey={weekKey} />}
         {tab==="checkin" && <CheckinTab checkin={checkin} setCheckin={setCheckin} showToast={showToast}
@@ -959,7 +967,7 @@ function WeekTab({plan,nextIdx,logs,weekKey,setWorkoutVariant,setNextWorkoutIdx,
 }
 
 // Review Tab
-function ReviewTab({benchWeight,setBenchWeight,usePlanA,setUsePlanA,volumeMod,setVolumeMod,review,setReview,showToast,nextWorkoutIdx,plan}){
+function ReviewTab({benchWeight,setBenchWeight,planMode,setPlanMode,volumeMod,setVolumeMod,review,setReview,showToast,nextWorkoutIdx,plan}){
   const [form,setForm] = useState({
     completed:  review?.form?.completed   ?? 0,
     benchPain:  review?.form?.benchPain   ?? 0,
@@ -991,7 +999,9 @@ function ReviewTab({benchWeight,setBenchWeight,usePlanA,setUsePlanA,volumeMod,se
 
   const apply = () => {
     if(!recs) return;
-    setBenchWeight(recs.benchNew); setUsePlanA(recs.planRec==="plan_a"); setVolumeMod(recs.volRec);
+    setBenchWeight(recs.benchNew);
+    if(planMode !== "custom") setPlanMode(recs.planRec==="plan_a" ? "planA" : "planB");
+    setVolumeMod(recs.volRec);
     setApplied(true); setReview(r=>({...r,applied:true}));
     showToast("Applied for next week!","success");
   };
@@ -1060,6 +1070,18 @@ function ReviewTab({benchWeight,setBenchWeight,usePlanA,setUsePlanA,volumeMod,se
           </Btn>
         </div>
       )}
+    </div>
+  );
+}
+
+function EmptyPlanNotice({setTab}){
+  return (
+    <div style={{background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"1.25rem",textAlign:"center"}}>
+      <p style={{margin:"0 0 6px",fontSize:15,fontWeight:700,color:"#E6EDF3"}}>No active plan</p>
+      <p style={{margin:"0 0 12px",fontSize:13,color:"#8A97A8",lineHeight:1.5}}>
+        Custom mode has no workouts yet. Head to Plans to build one, or switch back to Plan A / B.
+      </p>
+      <Btn onClick={()=>setTab("plans")} color="primary" style={{padding:"9px 16px",fontWeight:700}}>Go to Plans</Btn>
     </div>
   );
 }
