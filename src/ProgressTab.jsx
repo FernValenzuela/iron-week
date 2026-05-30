@@ -105,6 +105,19 @@ export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
       .slice(-8);
   },[logs]);
 
+  const bwData = useMemo(()=>{
+    const rows = macroFactor?.rows || [];
+    const fromMf = rows
+      .filter(r=> r && r.date && Number.isFinite(r.scaleWeight))
+      .map(r=>({date:r.date, weight:r.scaleWeight, trend:Number.isFinite(r.weightTrend) ? r.weightTrend : null}));
+    if(fromMf.length > 0) return fromMf;
+    const bw = parseFloat(checkin?.bw);
+    if(Number.isFinite(bw) && bw > 0 && weekKey){
+      return [{date:weekKey, weight:bw, trend:null}];
+    }
+    return [];
+  },[macroFactor,checkin,weekKey]);
+
   const loaded = rc !== null;
 
   return (
@@ -183,7 +196,32 @@ export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
       <div style={CARD}>
         <h3 style={SECTION_TITLE}>Bodyweight trend</h3>
         <p style={SECTION_SUB}>Daily scale weight (solid) and smoothed trend (dashed).</p>
-        <div style={SKELETON} />
+
+        {bwData.length === 0 ? (
+          <p style={EMPTY_MSG}>Import MacroFactor CSV in Check-in tab to see bodyweight trend.</p>
+        ) : (
+          <div style={CHART_BOX}>
+            {loaded ? (
+              <rc.ResponsiveContainer width="100%" height={200}>
+                <rc.LineChart data={bwData} margin={{top:8,right:8,left:-12,bottom:0}}>
+                  <rc.CartesianGrid stroke="#1A2533" strokeDasharray="3 3" />
+                  <rc.XAxis dataKey="date" tick={AXIS_STYLE} stroke="#2C3A4F" />
+                  <rc.YAxis tick={AXIS_STYLE} stroke="#2C3A4F" domain={["auto","auto"]} />
+                  <rc.Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    labelStyle={TOOLTIP_LABEL}
+                    itemStyle={{color:"#E6EDF3"}}
+                    formatter={(v,name)=>[v != null ? `${v} lb` : "-", name === "weight" ? "Scale" : "Trend"]}
+                  />
+                  <rc.Line type="monotone" dataKey="weight" stroke="#A99CFF" strokeWidth={2} dot={false} isAnimationActive={false} />
+                  <rc.Line type="monotone" dataKey="trend" stroke="#57D39A" strokeWidth={2} strokeDasharray="4 4" dot={false} isAnimationActive={false} />
+                </rc.LineChart>
+              </rc.ResponsiveContainer>
+            ) : (
+              <div style={SKELETON} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
