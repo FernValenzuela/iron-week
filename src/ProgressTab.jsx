@@ -81,6 +81,30 @@ export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
     return weightSeriesByExercise[selectedExerciseId] || [];
   },[selectedExerciseId,weightSeriesByExercise]);
 
+  const weeklyCompletion = useMemo(()=>{
+    const byWeek = {};
+    const entries = Object.entries(logs||{});
+    for(const [logKey,log] of entries){
+      if(!log || typeof log !== "object") continue;
+      const date = logKey.slice(0,10);
+      const rest = logKey.slice(11);
+      if(!rest) continue;
+      const baseId = rest.split("_")[0];
+      if(!byWeek[date]) byWeek[date] = {logged:new Set(), skipped:new Set()};
+      byWeek[date].logged.add(baseId);
+      if(log.skippedDay === true) byWeek[date].skipped.add(baseId);
+    }
+    return Object.entries(byWeek)
+      .map(([date,{logged,skipped}])=>{
+        const total = logged.size;
+        const skip  = skipped.size;
+        const completion = total > 0 ? Math.round(((total - skip) / total) * 100) : 0;
+        return {date, completion};
+      })
+      .sort((a,b)=> a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+      .slice(-8);
+  },[logs]);
+
   const loaded = rc !== null;
 
   return (
@@ -129,7 +153,31 @@ export default function ProgressTab({logs,checkin,macroFactor,weekKey}){
       <div style={CARD}>
         <h3 style={SECTION_TITLE}>Weekly completion</h3>
         <p style={SECTION_SUB}>Share of sessions completed (not skipped), last 8 weeks.</p>
-        <div style={SKELETON} />
+
+        {weeklyCompletion.length === 0 ? (
+          <p style={EMPTY_MSG}>Complete a workout to start your streak.</p>
+        ) : (
+          <div style={CHART_BOX}>
+            {loaded ? (
+              <rc.ResponsiveContainer width="100%" height={200}>
+                <rc.BarChart data={weeklyCompletion} margin={{top:8,right:8,left:-12,bottom:0}}>
+                  <rc.CartesianGrid stroke="#1A2533" strokeDasharray="3 3" />
+                  <rc.XAxis dataKey="date" tick={AXIS_STYLE} stroke="#2C3A4F" />
+                  <rc.YAxis tick={AXIS_STYLE} stroke="#2C3A4F" domain={[0,100]} />
+                  <rc.Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    labelStyle={TOOLTIP_LABEL}
+                    itemStyle={{color:"#E6EDF3"}}
+                    formatter={v=>[`${v}%`,"Completion"]}
+                  />
+                  <rc.Bar dataKey="completion" fill="#57D39A" radius={[4,4,0,0]} />
+                </rc.BarChart>
+              </rc.ResponsiveContainer>
+            ) : (
+              <div style={SKELETON} />
+            )}
+          </div>
+        )}
       </div>
 
       <div style={CARD}>
