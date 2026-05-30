@@ -579,7 +579,11 @@ export default function App(){
           logs={logs} review={review} benchWeight={benchWeight} planMode={planMode} customPlans={customPlans}
           volumeMod={volumeMod} workoutVariants={workoutVariants} plan={plan}
           nextWorkoutIdx={nextWorkoutIdx} weekKey={weekKey}
-          macroFactor={macroFactor} setMacroFactor={setMacroFactor} restoreBackup={restoreBackup} />}
+          macroFactor={macroFactor} setMacroFactor={setMacroFactor} restoreBackup={restoreBackup}
+          setBenchWeight={setBenchWeight} setNextWorkoutIdx={setNextWorkoutIdx}
+          setPlanMode={setPlanMode} setVolumeMod={setVolumeMod}
+          setWorkoutVariants={setWorkoutVariants} setLogs={setLogs}
+          setReview={setReview} setCustomPlans={setCustomPlans} />}
       </div>
 
       {toast && (
@@ -1173,7 +1177,7 @@ function buildAiExport({checkin,logs,review,benchWeight,planMode,volumeMod,worko
 }
 
 // Check-in Tab
-function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMode,customPlans,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor,setMacroFactor,restoreBackup}){
+function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMode,customPlans,volumeMod,workoutVariants,plan,nextWorkoutIdx,weekKey,macroFactor,setMacroFactor,restoreBackup,setBenchWeight,setNextWorkoutIdx,setPlanMode,setVolumeMod,setWorkoutVariants,setLogs,setReview,setCustomPlans}){
   const [macroPaste,setMacroPaste] = useState("");
   const upd = (k,v)=>setCheckin(c=>({...c,[k]:v}));
   const pColor = checkin.protein>=180?"#57D39A":checkin.protein>0?"#F4B350":"#64748B";
@@ -1277,6 +1281,11 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMo
       <Btn onClick={()=>showToast("Saved!","success")} color="primary" style={{width:"100%",padding:"10px",fontSize:14,fontWeight:700}}>
         <i className="ti ti-device-floppy" aria-hidden="true" style={{marginRight:6}}></i>Save check-in
       </Btn>
+      <CloudSyncSection
+        showToast={showToast}
+        restoreBackup={restoreBackup}
+        buildPayload={backupPayload}
+      />
       <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
         <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>Backup / restore</p>
         <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
@@ -1353,6 +1362,11 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMo
     </div>
   );
 }
+function CloudSyncSection(){
+  // Placeholder; full implementation lands in the next commit.
+  return null;
+}
+
 function Stat({label,value,color}){
   return (
     <div style={{background:"#101923",borderRadius:8,padding:"8px 10px",border:"1px solid #223044"}}>
