@@ -261,6 +261,23 @@ const ls = {
 const isoWeek = () => { const t=new Date(); t.setHours(0,0,0,0); t.setDate(t.getDate()-t.getDay()); return t.toISOString().slice(0,10); };
 const emptyMacroFactor = {importedAt:null,fileName:"",rows:[],summary:null};
 
+// v2 -> v3 migration: usePlanA boolean -> planMode enum, seed iw_custom_plans.
+// Idempotent: re-running on a v3 state is a no-op.
+function migrateSchema(){
+  const version = ls.get("iw_schema_version", 1);
+  if(version < 3){
+    if(ls.get("planMode", null) == null){
+      const usePlanA = ls.get("usePlanA", true);
+      ls.set("planMode", usePlanA ? "planA" : "planB");
+    }
+    if(ls.get("iw_custom_plans", null) == null){
+      ls.set("iw_custom_plans", []);
+    }
+    ls.set("iw_schema_version", 3);
+  }
+}
+migrateSchema();
+
 const downloadJsonFile = (payload, fileName) => {
   const blob = new Blob([JSON.stringify(payload,null,2)], {type:"application/json"});
   const url = URL.createObjectURL(blob);
