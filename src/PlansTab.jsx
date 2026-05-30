@@ -72,6 +72,19 @@ const MODE_OPTIONS = [
   {v:"custom", l:"Custom"},
 ];
 
+const CAUTION_OPTIONS = [
+  {v:null,     l:"None"},
+  {v:"yellow", l:"Yellow"},
+  {v:"red",    l:"Red"},
+];
+
+const SUB_OPTIONS = [
+  {v:null,         l:"None"},
+  {v:"bench",      l:"Bench"},
+  {v:"rear_delt",  l:"Rear Delt"},
+  {v:"oh_tri",     l:"Overhead Tri"},
+];
+
 const inputStyle = {
   background:"#0B121A",border:"1px solid #2C3A4F",borderRadius:6,
   color:"#E6EDF3",padding:"7px 10px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"
@@ -85,7 +98,7 @@ function makeBlankPlan(){
   return {id:makeCustomPlanId(),name:"",tag:"PUSH",exercises:[makeBlankExercise()]};
 }
 
-function ExerciseRow({exercise,idx,total,onChange,onMove,onDelete}){
+function ExerciseRow({exercise,idx,total,onChange,onMove,onDelete,advancedOpen,onToggleAdvanced}){
   const update = (field,value) => onChange(idx,{...exercise,[field]:value});
   return (
     <div style={{background:"#0B121A",border:"1px solid #223044",borderRadius:8,padding:"8px 10px",marginBottom:8}}>
@@ -112,31 +125,74 @@ function ExerciseRow({exercise,idx,total,onChange,onMove,onDelete}){
           style={{...inputStyle,width:70,textAlign:"center",padding:"7px 6px"}}
         />
       </div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginTop:6,gap:2}}>
-        <IconBtn onClick={()=>onMove(idx,-1)} icon="ti-arrow-up" title="Move up" disabled={idx===0}/>
-        <IconBtn onClick={()=>onMove(idx,1)}  icon="ti-arrow-down" title="Move down" disabled={idx===total-1}/>
-        <IconBtn onClick={()=>onDelete(idx)}  icon="ti-x" title="Remove" color="cross"/>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:6}}>
+        <Btn onClick={onToggleAdvanced} color="ghost" style={{padding:"4px 8px",fontSize:11}}>
+          {advancedOpen ? "Hide advanced" : "Advanced"}
+        </Btn>
+        <div style={{display:"flex",gap:2}}>
+          <IconBtn onClick={()=>onMove(idx,-1)} icon="ti-arrow-up" title="Move up" disabled={idx===0}/>
+          <IconBtn onClick={()=>onMove(idx,1)}  icon="ti-arrow-down" title="Move down" disabled={idx===total-1}/>
+          <IconBtn onClick={()=>onDelete(idx)}  icon="ti-x" title="Remove" color="cross"/>
+        </div>
       </div>
+      {advancedOpen && (
+        <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #223044"}}>
+          <Section label="Note">
+            <textarea
+              value={exercise.note||""}
+              onChange={e=>update("note",e.target.value)}
+              placeholder="Cue or notes"
+              rows={2}
+              style={{...inputStyle,width:"100%",resize:"vertical",minHeight:48}}
+            />
+          </Section>
+          <Section label="Caution">
+            <SegControl options={CAUTION_OPTIONS} value={exercise.caution||null} onChange={v=>update("caution",v)}/>
+          </Section>
+          <Section label="Sub">
+            <SegControl options={SUB_OPTIONS} value={exercise.sub||null} onChange={v=>update("sub",v)}/>
+          </Section>
+          <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13,color:"#C8D4E3"}}>
+            <input
+              type="checkbox"
+              checked={!!exercise.bench}
+              onChange={e=>update("bench",e.target.checked)}
+              style={{width:16,height:16,accentColor:"#1D9E75"}}
+            />
+            Bench rehab exercise
+          </label>
+        </div>
+      )}
     </div>
   );
 }
 
 export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlans,showToast}){
-  const [editingPlan,setEditingPlan] = useState(null);
+  const [editingPlan,setEditingPlan]   = useState(null);
+  const [openAdvanced,setOpenAdvanced] = useState(null);
 
   const inEditView = editingPlan !== null;
   const isNewPlan = inEditView && !customPlans.some(p=>p.id===editingPlan.id);
 
-  const startNewPlan = () => setEditingPlan(makeBlankPlan());
+  const startNewPlan = () => {
+    setEditingPlan(makeBlankPlan());
+    setOpenAdvanced(null);
+  };
 
-  const startEditPlan = (plan) => setEditingPlan({
-    id:plan.id,
-    name:plan.name||"",
-    tag:plan.tag||"PUSH",
-    exercises:(plan.exercises||[]).map(ex=>({...ex})),
-  });
+  const startEditPlan = (plan) => {
+    setEditingPlan({
+      id:plan.id,
+      name:plan.name||"",
+      tag:plan.tag||"PUSH",
+      exercises:(plan.exercises||[]).map(ex=>({...ex})),
+    });
+    setOpenAdvanced(null);
+  };
 
-  const cancelEdit = () => setEditingPlan(null);
+  const cancelEdit = () => {
+    setEditingPlan(null);
+    setOpenAdvanced(null);
+  };
 
   const saveEdit = () => {
     if(!editingPlan) return;
@@ -155,6 +211,7 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
     });
     showToast("Plan saved","success");
     setEditingPlan(null);
+    setOpenAdvanced(null);
   };
 
   const updateExercise = (idx,next) => {
@@ -186,7 +243,8 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
     setEditingPlan(prev => {
       if(!prev) return prev;
       const exercises = prev.exercises.slice();
-      exercises.splice(idx,1);
+      const removed = exercises.splice(idx,1)[0];
+      if(removed && openAdvanced === removed.id) setOpenAdvanced(null);
       return {...prev,exercises};
     });
   };
@@ -239,6 +297,8 @@ export default function PlansTab({planMode,setPlanMode,customPlans,setCustomPlan
               onChange={updateExercise}
               onMove={moveExercise}
               onDelete={deleteExercise}
+              advancedOpen={openAdvanced === ex.id}
+              onToggleAdvanced={()=>setOpenAdvanced(openAdvanced===ex.id ? null : ex.id)}
             />
           ))}
           <Btn onClick={addExercise} style={{width:"100%",padding:"9px 14px",fontWeight:600}}>
