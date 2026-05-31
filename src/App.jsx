@@ -1282,11 +1282,6 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMo
       <Btn onClick={()=>showToast("Saved!","success")} color="primary" style={{width:"100%",padding:"10px",fontSize:14,fontWeight:700}}>
         <i className="ti ti-device-floppy" aria-hidden="true" style={{marginRight:6}}></i>Save check-in
       </Btn>
-      <CloudSyncSection
-        showToast={showToast}
-        restoreBackup={restoreBackup}
-        buildPayload={backupPayload}
-      />
       <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
         <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>Backup / restore</p>
         <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
@@ -1307,6 +1302,11 @@ function CheckinTab({checkin,setCheckin,showToast,logs,review,benchWeight,planMo
           </label>
         </div>
       </div>
+      <CloudSyncSection
+        showToast={showToast}
+        restoreBackup={restoreBackup}
+        buildPayload={backupPayload}
+      />
       <div style={{marginTop:14,background:"#0B121A",border:"1px solid #223044",borderRadius:12,padding:"12px 14px"}}>
         <p style={{margin:"0 0 4px",fontSize:13,fontWeight:800,color:"#E6EDF3"}}>MacroFactor import</p>
         <p style={{margin:"0 0 10px",fontSize:12,color:"#8A97A8",lineHeight:1.5}}>
